@@ -39,7 +39,7 @@
         background: #000000;
         align-items: center;
         justify-content: center;
-        font-size: 32px;
+        font-size: 80pt;
         font-weight: bold;
         font-family: 'Jeju Gothic', sans-serif;
       }
@@ -51,22 +51,6 @@
         display: flex;
         align-items: center;
         justify-content: center;
-      }
-
-      #mainContainer button.front,
-      #mainContainer button.back {
-        display: inline;
-      }
-      #mainContainer.front button.back,
-      #mainContainer.back button.front {
-        display: none;
-      }
-      #cardContainer.year,
-      #cardContainer.month,
-      #cardContainer.day,
-      #cardContainer.hour,
-      #cardContainer.minute {
-        font-size: 80pt;
       }
 
       button {
@@ -99,175 +83,127 @@
       }
     </style>
     <script>
-      const ttsData = {
-        front: false,
-        vals: [],
-        pos: 0,
-      };
+
+      function h12(v) {
+        let h = v % 12;
+        return h === 0 ? 12 : h;
+      }
+
+      function fmt(v, mode) {
+        switch(mode) {
+          case 'd':
+            return v + "일";
+          case 'm':
+            return v + "월";
+          case 'y':
+            return v + "년";
+          case 'H':
+            return h12(v) + "시";
+          case 'M':
+            return v + "분";
+        }
+      }
 
       function rand(min, max) {
         return Math.floor(Math.random() * (max - min) + min);
       }
-
-      function initUI() {
-        const years = 50;
-        const now = new Date().getTime();
-        for(i=0; i < 1000; i++) {
-          const days = Math.floor(Math.random() * years * 365);
-          const date = new Date(now - (days * 24 * 60 * 60 * 1000));
-          date.setHours(rand(0, 24));
-          date.setMinutes(rand(0, 60));
-          date.setSeconds(0);
-          date.setMilliseconds(0);
-          ttsData.vals[i] = date;
-        }
-        ttsData.front = true;
-        advance(0);
-      }
-
-      function h12(d) {
-        let h = d.getHours() % 12;
-        return h === 0 ? 12 : h;
-      }
-      function ttsDate(d) {
-        return d.getFullYear() + "년 " + (d.getMonth() + 1) + "월 " + d.getDate() + "일";
-      }
-
-      function ttsHour(d) {
-        return h12(d) + "시";
-      }
-
-      function ttsMinute(d) {
-        return d.getMinutes() + "분";
-      }
-
-      function dfmt(d, mode) {
+      
+      function next(mode){
+        let text;
         switch(mode) {
-          case "date":
-            text = dfmt(d, 'year') + ' ' + dfmt(d, 'month') + ' ' + dfmt(d, 'day');
-            break;
-          case "time":
-            text = dfmt(d, 'hour') + ' ' + dfmt(d, 'minute');
-            break;
-          case "year":
-            text = tts = d.getFullYear() + "년";
-            break;
-          case "month":
-            text = (d.getMonth() + 1) + "월";
-            break;
-          case "day":
-            text = (d.getDate()) + "일";
-            break;
-          case "hour":
-            text = h12(d) + "시";
-            break;
-          case "minute":
-            text = (d.getMinutes()) + "분";
-            break;
-          default:
-            text = dfmt(d, 'date') + ' ' + dfmt(d, 'time');
+          case 'y':
+            text=fmt(rand(1950,2030), 'y');
+            break;;
+          case 'm':
+            text=fmt(rand(1,12), 'm');
+            break;;
+          case 'd':
+            text=fmt(rand(1,31), 'd');
+            break;;
+          case 'H':
+            text=fmt(rand(1,12), 'H');
+            break;;
+          case 'M':
+            text=fmt(rand(0,59), 'M');
+            break;;
         }
-        return text;
+        return {
+          front: "",
+          back: text,
+          tts: text
+        };
       }
 
-      function advance(pos) {
+      let card;
+
+      function speak() {
+        if (card && card.tts) {
+          speechSynthesis.cancel();
+          const message = new SpeechSynthesisUtterance();
+          message.lang = 'ko-KR';
+          message.text = card.tts;
+          speechSynthesis.speak(message);
+        }
+      }
+
+      function advance(force) {
         const elt = document.getElementById("cardContainer");
-        if (pos > 0) {
-          if (!ttsData.front) {
-            ttsData.pos = (ttsData.pos + 1) % ttsData.vals.length;
-          }
-          ttsData.front = !ttsData.front;
-        } else if (pos < 0) {
-          if (!ttsData.front) {
-            ttsData.pos = Math.max(0, ttsData.pos - 1);
-          }
-          ttsData.front = !ttsData.front;
+
+        let text, cls;
+        if (card == null || card.shown || force === true) {
+          const mode = document.querySelector("select[name=mode]").value || "d";
+          card = next(mode);
+          text = card.front;
+          cls = 'front';
+        } else {
+          card.shown = true;
+          text = card.back;
+          cls = 'back';
         }
 
-        document.getElementById("mainContainer").className = ttsData.front ? "front" : "back";
+        elt.innerText = text;
 
-
-        // figure out what we want to show
-        const d = ttsData.vals[ttsData.pos];
-
-        const mode = document.querySelector("select[name=mode]").value || "datetime";
-
-        let tts = dfmt(d, mode);
-        let text = dfmt(d, mode);
-
-        // if (options.date) {
-        //   tts = ttsDate(d);
-        //   text = d.getFullYear() + ". " + (d.getMonth() + 1) + ". " + d.getDate() + ".";
-        // }
-        //
-        // if (options.hour) {
-        //   tts += (d.getHours() < 12 ? " 오전 " : " 오후 ") + ttsHour(d);
-        //   text += (d.getHours() < 12 ? " 오전 " : " 오후 ") + h12(d);
-        //   if (options.minute) {
-        //     tts += " " + ttsMinute(d);
-        //     text += ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes();
-        //   } else {
-        //     text += ":00";
-        //   }
-        // } else if (options.minute) {
-        //   tts = ttsMinute(d);
-        //   text = d.getMinutes() + "min";
-        // }
-
-        elt.className = mode;
-        elt.innerText = ttsData.front ? "" : text.trim();
-
-        console.log("running synth", tts);
-        const message = new SpeechSynthesisUtterance();
-        message.lang = 'ko-KR';
-        message.text = tts;
-        speechSynthesis.speak(message);
+        speak();
       }
+
+      document.addEventListener('keydown', function(e){
+        if (e.ctrlKey || e.metaKey || e.isComposing) {
+          return;
+        }
+          switch (e.key) {
+            case ' ':
+              advance();
+              e.preventDefault();
+              break;
+            case 'r':
+            case 'R':
+              speak();
+              e.preventDefault();
+              break;
+          }
+      });
 
       function init() {
-        document.addEventListener('keydown', function(e){
-          if (e.target.tagName !== "SELECT" && e.target.tagName !== "BUTTON") {
-            switch (e.key) {
-              case ' ':
-              case 'ArrowRight':
-                advance(1);
-                break;
-              case 'ArrowLeft':
-                advance(-1);
-                break;
-              case 'r':
-                advance(0);
-                break;
-            }
-          }
-        });
-        initUI();
+        setTimeout(advance, 250);
       }
-
     </script>
   </head>
   <body onload="init()">
     <div id="mainContainer">
       <div id="topMenuContainer">
-        <select name="mode" onchange="advance(0);">
-          <option value="datetime">datetime</option>
-          <option value="date">date</option>
-          <option value="time">time</option>
-          <option disabled>──────────</option>
-          <option value="year">year</option>
-          <option value="month">month</option>
-          <option value="day">day</option>
-          <option value="hour">hour</option>
-          <option value="minute">minute</option>
+        <select name="mode" onchange="advance(true);">
+          <option value="y">year</option>
+          <option value="m">month</option>
+          <option value="d">day</option>
+          <option value="H">hour</option>
+          <option value="M">minute</option>
         </select>
       </div>
       <div class="line"></div>
       <div id="cardContainer"></div>
       <div id="buttonsContainer">
-        <button class="back" onclick="advance(-1)">prev</button>
-        <button class="" onclick="advance(0)">repeat</button>
-        <button class="front" onclick="advance(1)">show</button>
-        <button class="back" onclick="advance(1)">next</button>
+        <button onclick="speak()">again</button>
+        <button onclick="advance()">next</button>
       </div>
     </div>
   </body>
